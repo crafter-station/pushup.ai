@@ -45,6 +45,9 @@ export function usePushUpCounter() {
   const [phase, setPhase] = useState<PushUpState["phase"]>("up");
   const [elbowAngle, setElbowAngle] = useState(180);
 
+  // Session timing
+  const sessionStartRef = useRef<number | null>(null);
+
   // Recording
   const recordingRef = useRef(false);
   const framesRef = useRef<RecordedFrame[]>([]);
@@ -64,6 +67,9 @@ export function usePushUpCounter() {
       stateRef.current = next;
 
       if (next.count !== prev.count) {
+        if (next.count === 1 && prev.count === 0) {
+          sessionStartRef.current = performance.now();
+        }
         setCount(next.count);
         playBeep();
       }
@@ -119,11 +125,17 @@ export function usePushUpCounter() {
     framesRef.current = [];
   }, []);
 
+  const getSessionDurationMs = useCallback(() => {
+    if (!sessionStartRef.current) return 0;
+    return Math.round(performance.now() - sessionStartRef.current);
+  }, []);
+
   const reset = useCallback(() => {
     stateRef.current = createInitialState();
     setCount(0);
     setPhase("up");
     setElbowAngle(180);
+    sessionStartRef.current = null;
   }, []);
 
   // Cleanup interval on unmount
@@ -145,5 +157,6 @@ export function usePushUpCounter() {
     startRecording,
     stopRecording,
     clearRecording,
+    getSessionDurationMs,
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCamera } from "@/hooks/use-camera";
 import { usePoseDetection } from "@/hooks/use-pose-detection";
 import { usePushUpCounter } from "@/hooks/use-pushup-counter";
@@ -10,6 +11,8 @@ import { CounterDisplay } from "@/components/ui/counter-display";
 export function PushUpSession() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { videoRef, isActive, error, start, stop, flip } = useCamera();
+  const router = useRouter();
+  const [isSharing, setIsSharing] = useState(false);
   const {
     count,
     phase,
@@ -22,6 +25,7 @@ export function PushUpSession() {
     startRecording,
     stopRecording,
     clearRecording,
+    getSessionDurationMs,
   } = usePushUpCounter();
   const { fps } = usePoseDetection(
     videoRef,
@@ -29,6 +33,43 @@ export function PushUpSession() {
     isActive,
     processLandmarks
   );
+
+  const captureScreenshot = (): string | null => {
+    const video = videoRef.current;
+    const landmarks = canvasRef.current;
+    if (!video || !video.videoWidth) return null;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = video.videoWidth;
+    offscreen.height = video.videoHeight;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
+    // Draw video frame first, then landmarks overlay on top
+    ctx.drawImage(video, 0, 0);
+    if (landmarks && landmarks.width > 0) {
+      ctx.drawImage(landmarks, 0, 0, offscreen.width, offscreen.height);
+    }
+    return offscreen.toDataURL("image/jpeg", 0.7);
+  };
+
+  const handleShare = async () => {
+    if (count === 0 || isSharing) return;
+    setIsSharing(true);
+    try {
+      const screenshot = captureScreenshot();
+      const durationMs = getSessionDurationMs();
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count, durationMs, screenshot }),
+      });
+      if (!res.ok) throw new Error("Failed to save session");
+      const { id } = await res.json();
+      router.push(`/share/${id}`);
+    } catch (err) {
+      console.error("Share failed:", err);
+      setIsSharing(false);
+    }
+  };
 
   const btnClass =
     "px-6 py-2 border border-white/20 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-colors backdrop-blur-sm";
@@ -78,6 +119,15 @@ export function PushUpSession() {
             <button onClick={reset} className={btnClass}>
               RESET
             </button>
+            {count > 0 && (
+              <button
+                onClick={handleShare}
+                disabled={isSharing}
+                className={`${btnClass} border-green-500/40 text-green-400 ${isSharing ? "opacity-50" : ""}`}
+              >
+                {isSharing ? "SHARING..." : "SHARE"}
+              </button>
+            )}
             {isActive && (
               <>
                 <button onClick={flip} className={btnClass}>
