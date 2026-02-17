@@ -16,9 +16,9 @@ export const LANDMARK = {
 
 // Push-up detection thresholds
 // DOWN: arms must bend below this angle
-export const ANGLE_DOWN_THRESHOLD = 90;
-// UP: arms must extend above this angle (user's natural "up" is ~155-165°)
-export const ANGLE_UP_THRESHOLD = 150;
+export const ANGLE_DOWN_THRESHOLD = 110;
+// UP: arms must extend above this angle
+export const ANGLE_UP_THRESHOLD = 140;
 
 // EMA smoothing alpha (0.4 = responsive enough for consecutive reps)
 export const SMOOTHING = 0.4;
