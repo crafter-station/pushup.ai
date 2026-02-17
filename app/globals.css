@@ -5,6 +5,8 @@
   --foreground: #ffffff;
   --grid: #3a3a3a;
   --annotation: #6b6b6b;
+  --mid-gray: #8a8a8a;
+  --light-gray: #d4d4d4;
 }
 
 @theme inline {
@@ -12,6 +14,8 @@
   --color-foreground: var(--foreground);
   --color-grid: var(--grid);
   --color-annotation: var(--annotation);
+  --color-mid-gray: var(--mid-gray);
+  --color-light-gray: var(--light-gray);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
