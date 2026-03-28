@@ -1,4 +1,4 @@
-// MediaPipe Pose Landmark indices
+// MediaPipe Pose Landmark indices (33 keypoints)
 export const LANDMARK = {
   LEFT_SHOULDER: 11,
   RIGHT_SHOULDER: 12,
@@ -14,35 +14,22 @@ export const LANDMARK = {
   RIGHT_ANKLE: 28,
 } as const;
 
-// Push-up detection thresholds
-// DOWN: arms must bend below this angle
+// Ultralytics AIGym defaults — wide hysteresis band prevents false counts
 export const ANGLE_DOWN_THRESHOLD = 110;
-// UP: arms must extend above this angle
-export const ANGLE_UP_THRESHOLD = 140;
+export const ANGLE_UP_THRESHOLD = 145;
 
-// EMA smoothing alpha (0.4 = responsive enough for consecutive reps)
-export const SMOOTHING = 0.4;
-
-// Debounce: consecutive frames required to confirm transition
-export const DEBOUNCE_FRAMES = 2;
-
-// Minimum ms between state transitions (prevents impossibly fast reps)
-export const MIN_TRANSITION_MS = 300;
-
-// Landmark confidence gate
+// Keypoint confidence gate
 export const MIN_VISIBILITY = 0.5;
-
-// Max torso angle from horizontal (degrees) to be considered in push-up position
-// < 45° = horizontal (push-up), > 45° = vertical (standing)
-export const MAX_TORSO_ANGLE = 45;
 
 // Skeleton connections for drawing
 export const SKELETON_CONNECTIONS: [number, number][] = [
-  // Torso
+  // Torso (diamond: same-side + cross connections)
   [11, 12],
   [11, 23],
   [12, 24],
   [23, 24],
+  [23, 12],
+  [24, 11],
   // Left arm
   [11, 13],
   [13, 15],

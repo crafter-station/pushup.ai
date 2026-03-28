@@ -28,13 +28,12 @@ function playBeep() {
 
 export interface PushUpDrawState {
   phase: PushUpPhase;
-  smoothedAngle: number;
+  angle: number;
 }
 
 export interface RecordedFrame {
   t: number;
-  raw: number;
-  smoothed: number;
+  angle: number;
   phase: PushUpPhase;
   count: number;
 }
@@ -42,7 +41,7 @@ export interface RecordedFrame {
 export function usePushUpCounter() {
   const stateRef = useRef<PushUpState>(createInitialState());
   const [count, setCount] = useState(0);
-  const [phase, setPhase] = useState<PushUpState["phase"]>("up");
+  const [phase, setPhase] = useState<PushUpPhase>("up");
   const [elbowAngle, setElbowAngle] = useState(180);
 
   // Session timing
@@ -56,7 +55,6 @@ export function usePushUpCounter() {
   const [recordedData, setRecordedData] = useState<RecordedFrame[] | null>(
     null
   );
-  // Live stream: last N frames, updated on a 500ms interval
   const [liveFrames, setLiveFrames] = useState<RecordedFrame[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -74,22 +72,20 @@ export function usePushUpCounter() {
         playBeep();
       }
       if (next.phase !== prev.phase) setPhase(next.phase);
-      if (Math.round(next.elbowAngle) !== Math.round(prev.elbowAngle)) {
-        setElbowAngle(next.elbowAngle);
+      if (Math.round(next.angle) !== Math.round(prev.angle)) {
+        setElbowAngle(next.angle);
       }
 
-      // Record frame if recording
       if (recordingRef.current) {
         framesRef.current.push({
           t: Math.round(performance.now() - startTimeRef.current),
-          raw: Math.round(next.elbowAngle * 10) / 10,
-          smoothed: Math.round(next.smoothedAngle * 10) / 10,
+          angle: Math.round(next.angle * 10) / 10,
           phase: next.phase,
           count: next.count,
         });
       }
 
-      return { phase: next.phase, smoothedAngle: next.smoothedAngle };
+      return { phase: next.phase, angle: next.angle };
     },
     []
   );
@@ -102,7 +98,6 @@ export function usePushUpCounter() {
     setRecordedData(null);
     setLiveFrames([]);
 
-    // Flush last 8 frames to state every 500ms
     intervalRef.current = setInterval(() => {
       const all = framesRef.current;
       setLiveFrames(all.slice(-8));
@@ -138,7 +133,6 @@ export function usePushUpCounter() {
     sessionStartRef.current = null;
   }, []);
 
-  // Cleanup interval on unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

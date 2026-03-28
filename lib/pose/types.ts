@@ -10,10 +10,7 @@ export type PushUpPhase = "up" | "down";
 export interface PushUpState {
   phase: PushUpPhase;
   count: number;
-  elbowAngle: number;
-  smoothedAngle: number;
-  consecutiveFrames: number;
-  lastTransitionTime: number;
+  angle: number;
 }
 
 export interface PoseResult {

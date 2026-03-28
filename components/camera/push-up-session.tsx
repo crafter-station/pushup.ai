@@ -1,38 +1,72 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCamera } from "@/hooks/use-camera";
 import { usePoseDetection } from "@/hooks/use-pose-detection";
 import { usePushUpCounter } from "@/hooks/use-pushup-counter";
-import { CameraFeed } from "./camera-feed";
-import { CounterDisplay } from "@/components/ui/counter-display";
+import { ANGLE_DOWN_THRESHOLD } from "@/lib/pose/constants";
+
+const ANGLE_MAX = 180;
+const ANGLE_MIN = 45;
+const ANGLE_RANGE = ANGLE_MAX - ANGLE_MIN;
+
+function formatTime(seconds: number): string {
+  const min = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
 
 export function PushUpSession() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { videoRef, isActive, error, start, stop, flip } = useCamera();
   const router = useRouter();
   const [isSharing, setIsSharing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [flash, setFlash] = useState(false);
+  const prevCountRef = useRef(0);
+
   const {
     count,
     phase,
     elbowAngle,
     reset,
     processLandmarks,
-    isRecording,
-    recordedData,
-    liveFrames,
-    startRecording,
-    stopRecording,
-    clearRecording,
     getSessionDurationMs,
   } = usePushUpCounter();
+
   const { fps } = usePoseDetection(
     videoRef,
     canvasRef,
-    isActive,
+    isActive && !isPaused,
     processLandmarks
   );
+
+  // Timer
+  useEffect(() => {
+    if (!isActive || isPaused) return;
+    const id = setInterval(() => setTimer((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [isActive, isPaused]);
+
+  // Blue flash on rep
+  useEffect(() => {
+    if (count > prevCountRef.current) {
+      setFlash(true);
+      const id = setTimeout(() => setFlash(false), 300);
+      prevCountRef.current = count;
+      return () => clearTimeout(id);
+    }
+  }, [count]);
+
+  // Height meter
+  const indicatorPos = Math.max(
+    0,
+    Math.min(1, (ANGLE_MAX - elbowAngle) / ANGLE_RANGE)
+  );
+  const blueZoneTop = (ANGLE_MAX - ANGLE_DOWN_THRESHOLD) / ANGLE_RANGE;
+  const isInZone = phase === "down";
 
   const captureScreenshot = (): string | null => {
     const video = videoRef.current;
@@ -43,7 +77,6 @@ export function PushUpSession() {
     offscreen.height = video.videoHeight;
     const ctx = offscreen.getContext("2d");
     if (!ctx) return null;
-    // Draw video frame first, then landmarks overlay on top
     ctx.drawImage(video, 0, 0);
     if (landmarks && landmarks.width > 0) {
       ctx.drawImage(landmarks, 0, 0, offscreen.width, offscreen.height);
@@ -71,164 +104,207 @@ export function PushUpSession() {
     }
   };
 
-  const btnClass =
-    "px-6 py-2 border border-white/20 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-colors backdrop-blur-sm";
+  const handleClose = () => {
+    stop();
+    if (count > 0) {
+      handleShare();
+    } else {
+      router.push("/");
+    }
+  };
+
+  const handleStart = () => {
+    reset();
+    setTimer(0);
+    setIsPaused(false);
+    prevCountRef.current = 0;
+    start();
+  };
 
   return (
-    <div className="relative z-10 flex flex-col items-center min-h-screen">
-      {/* Full-screen camera feed */}
-      <CameraFeed videoRef={videoRef} canvasRef={canvasRef} />
+    <div className="h-dvh flex flex-col bg-white">
+      {/* Camera area — video always in DOM so videoRef is never null */}
+      <div className="relative flex-1 min-h-0 bg-black rounded-b-[2rem] overflow-hidden">
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          playsInline
+          muted
+        />
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
 
-      {/* Overlay UI */}
-      <div className="absolute inset-0 flex flex-col items-center justify-between py-12 pointer-events-none">
-        {/* Counter */}
-        <div className="flex flex-col items-center gap-2">
-          <CounterDisplay count={count} />
-          {isRecording && (
-            <span className="font-mono text-[10px] text-red-500 uppercase tracking-widest animate-pulse">
-              REC
+        {/* Pre-start overlay */}
+        {!isActive && (
+          <div className="absolute inset-0 z-20 bg-black flex flex-col items-center justify-center gap-5">
+            {error && (
+              <p className="text-red-500 text-sm px-8 text-center">{error}</p>
+            )}
+            <button
+              onClick={handleStart}
+              className="w-20 h-20 rounded-full bg-white flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <svg viewBox="0 0 24 24" className="w-8 h-8 ml-1" fill="black">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+            <span className="text-white/40 text-sm tracking-wider">
+              TAP TO START
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Bottom info + controls */}
-        <div className="flex flex-col items-center gap-4 pointer-events-auto">
-          {/* Phase & angle bar */}
-          <div className="flex items-center gap-6 font-mono text-[10px] text-white/50 uppercase tracking-widest">
-            <span>PHASE: {phase.toUpperCase()}</span>
-            <span>ANGLE: {Math.round(elbowAngle)}&deg;</span>
-            <span>FPS: {fps}</span>
+        {/* Active overlays */}
+        {isActive && (
+          <>
+            {/* Blue flash on rep */}
+            {flash && (
+              <div className="absolute inset-0 bg-blue-500/20 pointer-events-none z-10" />
+            )}
+
+            {/* Top controls */}
+            <div
+              className="absolute left-0 right-0 flex justify-between px-4 z-10"
+              style={{ top: "max(env(safe-area-inset-top, 12px), 12px)" }}
+            >
+              <button
+                onClick={flip}
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center active:scale-95 transition-transform"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 7h4l2-3h6l2 3h4v13H3z" />
+                  <circle cx="12" cy="14" r="3" />
+                </svg>
+              </button>
+              <button
+                onClick={handleClose}
+                disabled={isSharing}
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center active:scale-95 transition-transform"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Height meter */}
+            <div className="absolute right-4 top-20 bottom-6 w-8 z-10">
+              <div className="relative h-full rounded-full bg-black/40 backdrop-blur-md">
+                {/* Blue target zone */}
+                <div
+                  className="absolute left-1.5 right-1.5 rounded-full bg-blue-500"
+                  style={{
+                    top: `${blueZoneTop * 100}%`,
+                    bottom: "4px",
+                  }}
+                />
+                {/* White indicator */}
+                <div
+                  className="absolute left-1.5 right-1.5 rounded-full transition-all duration-100 ease-out"
+                  style={{
+                    height: "14%",
+                    top: `${Math.min(indicatorPos * 86, 86)}%`,
+                    backgroundColor: isInZone ? "#3b82f6" : "white",
+                    boxShadow: isInZone
+                      ? "0 0 16px 6px rgba(59,130,246,0.7)"
+                      : "0 1px 4px rgba(0,0,0,0.3)",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Rep counter overlay */}
+            <div className="absolute bottom-4 left-4 z-10 flex items-baseline gap-1.5">
+              <span className="text-[64px] leading-none font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tabular-nums">
+                {count}
+              </span>
+              <span className="text-lg font-semibold text-white/70 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                reps
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Bottom card */}
+      <div
+        className="shrink-0 px-6 pt-5"
+        style={{
+          paddingBottom: "max(env(safe-area-inset-bottom, 16px), 16px)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[56px] leading-none font-black tracking-tight tabular-nums">
+              {count}
+            </span>
+            <span className="text-xl text-neutral-400 font-medium">Reps</span>
           </div>
 
-          {/* Error */}
-          {error && (
-            <p className="text-red-500 font-mono text-xs">{error}</p>
-          )}
-
-          {/* Controls */}
-          <div className="flex items-center gap-4 flex-wrap justify-center">
-            {!isActive ? (
-              <button onClick={start} className={btnClass}>
-                START
-              </button>
-            ) : (
-              <button onClick={stop} className={btnClass}>
-                STOP
-              </button>
-            )}
-            <button onClick={reset} className={btnClass}>
-              RESET
-            </button>
+          <div className="flex items-center gap-3">
             {count > 0 && (
               <button
                 onClick={handleShare}
                 disabled={isSharing}
-                className={`${btnClass} border-green-500/40 text-green-400 ${isSharing ? "opacity-50" : ""}`}
+                className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center active:scale-95 transition-transform"
               >
-                {isSharing ? "SHARING..." : "SHARE"}
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke={isSharing ? "#9ca3af" : "#22c55e"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13" />
+                </svg>
               </button>
             )}
             {isActive && (
-              <>
-                <button onClick={flip} className={btnClass}>
-                  FLIP
-                </button>
-                {!isRecording ? (
-                  <button
-                    onClick={startRecording}
-                    className={`${btnClass} border-red-500/40 text-red-400`}
+              <button
+                onClick={() => setIsPaused((p) => !p)}
+                className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center active:scale-95 transition-transform"
+              >
+                {isPaused ? (
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-6 h-6 ml-0.5"
+                    fill="black"
                   >
-                    REC
-                  </button>
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
                 ) : (
-                  <button
-                    onClick={stopRecording}
-                    className={`${btnClass} border-red-500/60 text-red-400 animate-pulse`}
-                  >
-                    STOP REC
-                  </button>
+                  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="black">
+                    <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                  </svg>
                 )}
-              </>
+              </button>
             )}
           </div>
         </div>
+
+        <div className="text-[40px] leading-tight font-bold tracking-tight tabular-nums mt-1">
+          {formatTime(timer)}
+        </div>
       </div>
-
-      {/* Live stream panel */}
-      {isRecording && liveFrames.length > 0 && (
-        <div className="fixed top-4 right-4 z-20 w-72 pointer-events-none">
-          <div className="bg-black/80 border border-white/10 rounded backdrop-blur-sm p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-mono text-[9px] text-white/40 uppercase tracking-widest">
-                LIVE DATA
-              </span>
-              <span className="font-mono text-[9px] text-red-500 animate-pulse">
-                ●
-              </span>
-            </div>
-            <div className="font-mono text-[10px] text-white/70 space-y-px overflow-hidden">
-              {liveFrames.map((f, i) => (
-                <div
-                  key={f.t}
-                  className="flex gap-2 transition-opacity"
-                  style={{ opacity: 0.4 + (i / liveFrames.length) * 0.6 }}
-                >
-                  <span className="text-white/30 w-12 text-right shrink-0">
-                    {(f.t / 1000).toFixed(1)}s
-                  </span>
-                  <span className="w-10 shrink-0">
-                    {f.raw}&deg;
-                  </span>
-                  <span className="w-10 text-white/40 shrink-0">
-                    ~{f.smoothed}&deg;
-                  </span>
-                  <span
-                    className={
-                      f.phase === "down" ? "text-yellow-400" : "text-green-400"
-                    }
-                  >
-                    {f.phase}
-                  </span>
-                  {f.count > 0 && (
-                    <span className="text-white/50">#{f.count}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Recorded data panel (full screen, after stop) */}
-      {recordedData && (
-        <div className="fixed inset-0 z-30 bg-black/90 flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs text-white/60 uppercase tracking-widest">
-                RECORDED: {recordedData.length} FRAMES
-              </span>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      JSON.stringify(recordedData, null, 2)
-                    );
-                  }}
-                  className={btnClass}
-                >
-                  COPY
-                </button>
-                <button onClick={clearRecording} className={btnClass}>
-                  CLOSE
-                </button>
-              </div>
-            </div>
-            <pre className="bg-white/5 border border-white/10 rounded p-4 font-mono text-[11px] text-white/80 overflow-auto max-h-[70vh] select-all">
-              {JSON.stringify(recordedData, null, 2)}
-            </pre>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

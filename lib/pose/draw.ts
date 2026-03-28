@@ -6,29 +6,22 @@ import {
 } from "./constants";
 
 /**
- * Compute progress toward the next threshold (0 → 1).
- * In "up" phase: progress = how close to bending down to 90°
- * In "down" phase: progress = how close to extending back to 160°
+ * Progress toward the next threshold (0 → 1).
+ * "up" phase: progress = how close to bending down to 90°
+ * "down" phase: progress = how close to extending back to 145°
  */
-function getProgress(phase: PushUpPhase, smoothedAngle: number): number {
+function getProgress(phase: PushUpPhase, angle: number): number {
   if (phase === "up") {
-    // Going from ~180° down toward 90°. Progress = 1 when at 90°.
-    const start = ANGLE_UP_THRESHOLD; // 160° (where "up" begins)
-    const end = ANGLE_DOWN_THRESHOLD; // 90° (target)
-    return Math.max(0, Math.min(1, (start - smoothedAngle) / (start - end)));
+    const start = ANGLE_UP_THRESHOLD;
+    const end = ANGLE_DOWN_THRESHOLD;
+    return Math.max(0, Math.min(1, (start - angle) / (start - end)));
   }
-  // "down" phase: going from ~90° up toward 160°. Progress = 1 when at 160°.
-  const start = ANGLE_DOWN_THRESHOLD; // 90° (where "down" begins)
-  const end = ANGLE_UP_THRESHOLD; // 160° (target)
-  return Math.max(0, Math.min(1, (smoothedAngle - start) / (end - start)));
+  const start = ANGLE_DOWN_THRESHOLD;
+  const end = ANGLE_UP_THRESHOLD;
+  return Math.max(0, Math.min(1, (angle - start) / (end - start)));
 }
 
-/**
- * Map progress (0-1) to a color.
- * 0.0 → red (hue 0)
- * 0.5 → yellow (hue 60)
- * 1.0 → green (hue 120)
- */
+/** Map progress (0-1) → red → yellow → green. */
 function progressColor(progress: number, alpha: number): string {
   const hue = progress * 120;
   return `hsla(${hue}, 100%, 50%, ${alpha})`;
@@ -36,7 +29,7 @@ function progressColor(progress: number, alpha: number): string {
 
 export interface DrawOptions {
   phase: PushUpPhase;
-  smoothedAngle: number;
+  angle: number;
 }
 
 export function drawPose(
@@ -48,9 +41,7 @@ export function drawPose(
 ): void {
   ctx.clearRect(0, 0, width, height);
 
-  const progress = options
-    ? getProgress(options.phase, options.smoothedAngle)
-    : 0;
+  const progress = options ? getProgress(options.phase, options.angle) : 0;
   const lineColor = options
     ? progressColor(progress, 0.8)
     : "rgba(255, 255, 255, 0.6)";
@@ -58,7 +49,7 @@ export function drawPose(
     ? progressColor(progress, 1)
     : "rgba(255, 255, 255, 0.9)";
 
-  // Draw skeleton connections
+  // Skeleton connections
   ctx.strokeStyle = lineColor;
   ctx.lineWidth = 3;
   ctx.lineCap = "round";
@@ -74,7 +65,7 @@ export function drawPose(
     ctx.stroke();
   }
 
-  // Draw keypoints
+  // Keypoints
   ctx.fillStyle = dotColor;
   for (const lm of landmarks) {
     if (lm.visibility < 0.5) continue;
