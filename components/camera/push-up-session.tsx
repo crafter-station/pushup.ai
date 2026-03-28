@@ -25,6 +25,7 @@ export function PushUpSession() {
   const [isPaused, setIsPaused] = useState(false);
   const [timer, setTimer] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const prevCountRef = useRef(0);
 
   const {
@@ -43,12 +44,28 @@ export function PushUpSession() {
     processLandmarks
   );
 
-  // Timer
+  // Countdown after start (3 → 2 → 1 → GO)
   useEffect(() => {
-    if (!isActive || isPaused) return;
+    if (countdown === null || countdown <= 0) return;
+    const id = setTimeout(() => setCountdown(countdown - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown]);
+
+  // When countdown finishes, reset to clear any false positives from positioning
+  useEffect(() => {
+    if (countdown !== 0) return;
+    reset();
+    prevCountRef.current = 0;
+    setTimer(0);
+    setCountdown(null);
+  }, [countdown, reset]);
+
+  // Timer — don't run during countdown
+  useEffect(() => {
+    if (!isActive || isPaused || countdown !== null) return;
     const id = setInterval(() => setTimer((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [isActive, isPaused]);
+  }, [isActive, isPaused, countdown]);
 
   // Blue flash on rep
   useEffect(() => {
@@ -119,6 +136,7 @@ export function PushUpSession() {
     setIsPaused(false);
     prevCountRef.current = 0;
     start();
+    setCountdown(3);
   };
 
   return (
@@ -152,6 +170,18 @@ export function PushUpSession() {
             </button>
             <span className="text-white/40 text-sm tracking-wider">
               TAP TO START
+            </span>
+          </div>
+        )}
+
+        {/* Countdown overlay */}
+        {isActive && countdown !== null && countdown > 0 && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 pointer-events-none">
+            <span className="text-[140px] leading-none font-black text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] tabular-nums animate-pulse">
+              {countdown}
+            </span>
+            <span className="text-white/60 text-lg font-medium mt-4 tracking-wider">
+              GET IN POSITION
             </span>
           </div>
         )}
