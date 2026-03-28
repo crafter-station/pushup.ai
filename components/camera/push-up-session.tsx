@@ -166,8 +166,8 @@ export function PushUpSession() {
 
             {/* Top controls */}
             <div
-              className="absolute left-0 right-0 flex justify-between px-4 z-10"
-              style={{ top: "max(env(safe-area-inset-top, 12px), 12px)" }}
+              className="absolute left-0 right-0 flex justify-between px-4 z-20"
+              style={{ top: "calc(max(env(safe-area-inset-top, 12px), 12px) + 4px)" }}
             >
               <button
                 onClick={flip}
@@ -204,8 +204,8 @@ export function PushUpSession() {
               </button>
             </div>
 
-            {/* Height meter */}
-            <div className="absolute right-4 top-20 bottom-6 w-8 z-10">
+            {/* Height meter — below top buttons, above bottom counter */}
+            <div className="absolute right-4 top-16 bottom-24 w-8 z-10">
               <div className="relative h-full rounded-full bg-black/40 backdrop-blur-md">
                 {/* Blue target zone */}
                 <div

@@ -7,7 +7,7 @@ export function useCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const [isActive, setIsActive] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">(
-    "environment"
+    "user"
   );
   const [error, setError] = useState<string | null>(null);
 
