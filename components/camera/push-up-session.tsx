@@ -37,11 +37,15 @@ export function PushUpSession() {
     getSessionDurationMs,
   } = usePushUpCounter();
 
+  const countdownActive = countdown !== null && countdown > 0;
+
   const { fps } = usePoseDetection(
     videoRef,
     canvasRef,
     isActive && !isPaused,
-    processLandmarks
+    countdownActive
+      ? () => ({ phase: "up" as const, angle: 180 })
+      : processLandmarks
   );
 
   // Countdown after start (3 → 2 → 1 → GO)
@@ -136,7 +140,7 @@ export function PushUpSession() {
     setIsPaused(false);
     prevCountRef.current = 0;
     start();
-    setCountdown(3);
+    setCountdown(8);
   };
 
   return (
@@ -174,15 +178,29 @@ export function PushUpSession() {
           </div>
         )}
 
-        {/* Countdown overlay */}
-        {isActive && countdown !== null && countdown > 0 && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 pointer-events-none">
-            <span className="text-[140px] leading-none font-black text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] tabular-nums animate-pulse">
+        {/* Countdown overlay with positioning instructions */}
+        {isActive && countdownActive && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 pointer-events-none px-8">
+            <span className="text-[120px] leading-none font-black text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] tabular-nums">
               {countdown}
             </span>
-            <span className="text-white/60 text-lg font-medium mt-4 tracking-wider">
-              GET IN POSITION
-            </span>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <span className="text-white text-xl font-bold tracking-wide">
+                GET IN POSITION
+              </span>
+              <div className="flex flex-col items-center gap-1.5 text-white/70 text-sm">
+                <span>Place your phone on the ground facing you</span>
+                <span>Make sure your full body is visible</span>
+                <span>Get into push-up position and hold</span>
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div className="mt-8 w-48 h-1.5 rounded-full bg-white/20 overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-1000 ease-linear"
+                style={{ width: `${((8 - countdown) / 8) * 100}%` }}
+              />
+            </div>
           </div>
         )}
 
